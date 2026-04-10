@@ -1,8 +1,8 @@
-langchain
-langgraph
-pinecone-client
-openai
 streamlit
+langgraph
+langchain
+langchain-openai
+langchain-pinecone
+pinecone-client
 python-dotenv
-tiktoken
-pinecone>=5.0.0
+requests

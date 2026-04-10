@@ -1,0 +1,8 @@
+langchain
+langgraph
+pinecone-client
+openai
+streamlit
+python-dotenv
+tiktoken
+pinecone>=5.0.0

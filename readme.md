@@ -1,7 +1,3 @@
-Here is the complete **README.md** file content in clean Markdown format, without any emojis.
-
----
-
 # AutoStream: Intelligent Video Automation Agent
 
 AutoStream is a production-grade AI agent designed to handle customer inquiries about video automation services and automate the lead generation process. Built using LangGraph, it features a robust state machine that handles task-switching between a knowledge base (RAG) and a lead-capture tool.

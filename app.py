@@ -3,7 +3,7 @@ from agent_logic import agent_app
 from langchain_core.messages import HumanMessage, AIMessage
 
 st.set_page_config(page_title="AutoStream AI", page_icon="🎬")
-st.title("🎬 AutoStream Intelligent Agent")
+st.title(" AutoStream Intelligent Agent")
 
 # Initialize Session State
 if "messages" not in st.session_state:

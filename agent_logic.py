@@ -8,7 +8,6 @@ from langchain_pinecone import PineconeVectorStore
 
 load_dotenv()
 
-# --- 1. FAST CONNECTION SETUP ---
 # Standardizing the Embeddings call
 _embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small",
@@ -44,31 +43,38 @@ class AgentState(TypedDict):
 
 def mock_lead_capture(name, email, platform):
     print(f"\n--- TOOL EXECUTION SUCCESS: {name} | {email} | {platform} ---")
-    return f"✅ Success! I've registered you, {name}. Our team will contact you at {email}."
+    return f" Success! I've registered you, {name}. Our team will contact you at {email}."
 
 # --- 2. THE NODES ---
-
 def classifier_node(state: AgentState):
     msg = state['messages'][-1].content.lower().strip()
     
-    # 0ms Instant Bypass for Greetings
+    # 1. Instant Bypass for Greetings
     if msg in ["hi", "hello", "hey", "hii", "hola"]:
         return {"intent": "greeting"}
     
-    # Keyword Force for Inquiry (Plans/Pricing)
-    if any(x in msg for x in ["plan", "price", "refund", "cost", "feature", "limit"]):
+    # 2. Keyword Force for Inquiry
+    if any(x in msg for x in ["plan", "price", "refund", "cost", "feature", "limit", "details"]):
         return {"intent": "inquiry"}
         
+    # 3. Keyword Force for Lead Gen
     if any(x in msg for x in ["sign up", "join", "buy", "start", "register"]):
         return {"intent": "lead_gen"}
     
-    try:
-        llm = get_llm()
-        prompt = f"Classify intent: '{msg}'. Categories: inquiry, lead_gen, greeting, out_of_scope. Return 1 word."
-        intent = llm.invoke(prompt).content.strip().lower()
-        return {"intent": intent}
-    except:
-        return {"intent": "inquiry"} # Fallback to inquiry if AI fails
+    # 4. Smart Classifier for "Out of Scope" (The Fix)
+    llm = get_llm()
+    prompt = f"""
+    Analyze the user message: "{msg}"
+    
+    Is this related to video automation, AutoStream, pricing, or signing up?
+    - If YES and it's a question: return 'inquiry'
+    - If YES and they want to start: return 'lead_gen'
+    - If NO (e.g., asking about Twitter, ML, cooking, generic facts): return 'out_of_scope'
+    
+    Return ONLY one word: inquiry, lead_gen, greeting, or out_of_scope.
+    """
+    intent = llm.invoke(prompt).content.strip().lower()
+    return {"intent": intent}# Fallback to inquiry if AI fails
 
 def rag_node(state: AgentState):
     if state['intent'] == 'inquiry':
@@ -79,21 +85,27 @@ def rag_node(state: AgentState):
         except:
             return {"context": ""}
     return {"context": ""}
-
 def responder_node(state: AgentState):
     intent = state['intent']
     lead = state['lead_data']
     context = state.get('context', "")
-    last_msg = state['messages'][-1].content.lower()
+    last_msg = state['messages'][-1].content
 
+    # 1. Instant Greeting
     if intent == "greeting":
         return {"messages": [AIMessage(content="Hi! I'm the AutoStream Assistant. Ask about our plans or say 'Sign me up' to start.")]}
 
+    # 2. Respectful Refusal for Out of Scope (The Fix)
+    if intent == "out_of_scope":
+        return {"messages": [AIMessage(content="I'm specifically trained to help with AutoStream video tools. I'm afraid I can't provide information on outside topics like that!")]}
+
+    # 3. RAG Response
     if context:
         llm = get_llm()
-        ans = llm.invoke(f"Context: {context}\nQuestion: {last_msg}\nAnswer concisely.").content
+        ans = llm.invoke(f"Context: {context}\nQuestion: {last_msg}\nAnswer concisely based ONLY on the context.").content
         return {"messages": [AIMessage(content=ans)]}
 
+    # 4. Lead Capture
     if intent == "lead_gen" or (lead and lead.get('name')):
         if not lead.get('name'):
             return {"messages": [AIMessage(content="I'd love to help! What is your full name?")]}
@@ -103,16 +115,10 @@ def responder_node(state: AgentState):
             return {"messages": [AIMessage(content="Which platform do you create for (YouTube/Instagram)?")]}
         
         res = mock_lead_capture(lead['name'], lead['email'], lead['platform'])
-        return {
-            "messages": [AIMessage(content=res)], 
-            "lead_data": {"name": None, "email": None, "platform": None}
-        }
+        return {"messages": [AIMessage(content=res)], "lead_data": {"name": None, "email": None, "platform": None}}
 
-    if intent == "out_of_scope":
-        return {"messages": [AIMessage(content="I'm here for AutoStream help only. I can't answer general questions like that.")]}
-
-    return {"messages": [AIMessage(content="How else can I help you with AutoStream?")]}
-
+    # Fallback
+    return {"messages": [AIMessage(content="I'm here to help with AutoStream. You can ask about our pricing plans or how to sign up.")]}
 # --- 3. THE GRAPH ---
 builder = StateGraph(AgentState)
 builder.add_node("classify", classifier_node)

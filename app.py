@@ -3,54 +3,50 @@ from agent_logic import agent_app
 from langchain_core.messages import HumanMessage, AIMessage
 
 st.set_page_config(page_title="AutoStream AI", page_icon="🎬")
-st.title(" AutoStream Intelligent Agent")
+st.title("AutoStream Intelligent Agent")
 
-# Initialize Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "lead_data" not in st.session_state:
     st.session_state.lead_data = {"name": None, "email": None, "platform": None}
 
-# Display Messages
 for m in st.session_state.messages:
     with st.chat_message("user" if isinstance(m, HumanMessage) else "assistant"):
         st.markdown(m.content)
 
-# User Input
-if prompt := st.chat_input("Ask about AutoStream plans..."):
+if prompt := st.chat_input("Type here..."):
     st.session_state.messages.append(HumanMessage(content=prompt))
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Simple Lead Data Parsing based on last Assistant message
+    # --- CRITICAL: CAPTURE DATA FROM PREVIOUS QUESTION ---
     last_ai_text = ""
     if len(st.session_state.messages) > 1:
         for m in reversed(st.session_state.messages[:-1]):
             if isinstance(m, AIMessage):
-                last_ai_text = m.content
+                last_ai_text = m.content.lower()
                 break
 
-    lead = st.session_state.lead_data
+    # If the bot just asked for these, save the current prompt into lead_data
     if "full name?" in last_ai_text:
-        lead["name"] = prompt
-    elif "email address?" in last_ai_text:
-        lead["email"] = prompt
-    elif "Which platform" in last_ai_text:
-        lead["platform"] = prompt
+        st.session_state.lead_data["name"] = prompt
+    elif "email?" in last_ai_text:
+        st.session_state.lead_data["email"] = prompt
+    elif "platform" in last_ai_text:
+        st.session_state.lead_data["platform"] = prompt
 
-    # Call the Agent
+    # --- INVOKE AGENT ---
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        with st.spinner("Processing..."):
             inputs = {
                 "messages": st.session_state.messages, 
-                "lead_data": lead, 
+                "lead_data": st.session_state.lead_data, 
                 "context": ""
             }
             output = agent_app.invoke(inputs)
             
-            # Update Lead Data from Agent's choice
-            if "lead_data" in output:
-                st.session_state.lead_data = output["lead_data"]
+            # Update state with Agent's results
+            st.session_state.lead_data = output.get("lead_data", st.session_state.lead_data)
             
             response = output["messages"][-1].content
             st.markdown(response)
